@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
+	"unicode"
 )
 
 // Server defines the minimum contract our
@@ -79,12 +81,41 @@ func (t *TCPServer) handleConnection(conn net.Conn) {
 	defer conn.Close()
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	for {
-		req, err := rw.ReadString('\n')
+		c, _, err := rw.ReadRune()
 		if err != nil {
-			rw.WriteString("failed to read input")
-			rw.Flush()
+			return
 		}
-		rw.WriteString(fmt.Sprintf("Request received: %s", req))
+		rw.WriteString(fmt.Sprintf("TYPE = %c\n", c))
+		switch c {
+		case BULK_STRING:
+			bulkLength := 0
+			c, _, _ = rw.ReadRune()
+			for unicode.IsNumber(c) {
+				if unicode.IsNumber(c) {
+					x, _ := strconv.ParseInt(string(c), 10, 0)
+					bulkLength = (bulkLength * 10) + int(x)
+				}
+				c, _, _ = rw.ReadRune()
+			}
+			rw.WriteString(fmt.Sprintf("Length: %d\n", bulkLength))
+			rw.ReadRune()           // \r
+			c, _, _ = rw.ReadRune() // \n
+			bulkString := ""
+			for i := 0; i <= bulkLength && !unicode.IsControl(c); i++ {
+				println(string(c))
+				bulkString += string(c)
+				c, _, _ = rw.ReadRune()
+			}
+			if bulkString == "ping" {
+				rw.WriteString("+PONG\r\n")
+			} else {
+				rw.WriteString(bulkString)
+			}
+			rw.ReadRune()
+			rw.ReadRune()
+		default:
+			rw.WriteString("+OK\r\n")
+		}
 		rw.Flush()
 	}
 }
