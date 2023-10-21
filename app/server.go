@@ -3,10 +3,7 @@ package app
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"net"
-	"strconv"
-	"unicode"
 )
 
 // Server defines the minimum contract our
@@ -59,63 +56,19 @@ func (t *TCPServer) handleConnections() (err error) {
 	}
 }
 
-const (
-	SIMPLE_STRING   = '+'
-	SIMPLE_ERROR    = '-'
-	INTEGER         = ':'
-	BULK_STRING     = '$'
-	ARRAY           = '*'
-	NULL            = '_'
-	BOOLEAN         = '#'
-	DOUBLE          = ','
-	BIG_NUMBER      = '('
-	BULK_ERROR      = '!'
-	VERBATIM_STRING = '='
-	MAPS            = '%'
-	SETS            = '~'
-)
-
 // handleConnections deals with the business logic of
 // each connection and their requests.
 func (t *TCPServer) handleConnection(conn net.Conn) {
 	defer conn.Close()
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	for {
-		c, _, err := rw.ReadRune()
+		buffer := make([]byte, 512*1024*1024)
+		readBytes, err := conn.Read(buffer)
 		if err != nil {
 			return
 		}
-		rw.WriteString(fmt.Sprintf("TYPE = %c\n", c))
-		switch c {
-		case BULK_STRING:
-			bulkLength := 0
-			c, _, _ = rw.ReadRune()
-			for unicode.IsNumber(c) {
-				if unicode.IsNumber(c) {
-					x, _ := strconv.ParseInt(string(c), 10, 0)
-					bulkLength = (bulkLength * 10) + int(x)
-				}
-				c, _, _ = rw.ReadRune()
-			}
-			rw.WriteString(fmt.Sprintf("Length: %d\n", bulkLength))
-			rw.ReadRune()           // \r
-			c, _, _ = rw.ReadRune() // \n
-			bulkString := ""
-			for i := 0; i <= bulkLength && !unicode.IsControl(c); i++ {
-				println(string(c))
-				bulkString += string(c)
-				c, _, _ = rw.ReadRune()
-			}
-			if bulkString == "ping" {
-				rw.WriteString("+PONG\r\n")
-			} else {
-				rw.WriteString(bulkString)
-			}
-			rw.ReadRune()
-			rw.ReadRune()
-		default:
-			rw.WriteString("+OK\r\n")
-		}
+		response := ProcessRequest(string(buffer[0:readBytes]))
+		rw.WriteString(response)
 		rw.Flush()
 	}
 }
