@@ -4,10 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"net"
-	"sync"
 )
-
-var wg sync.WaitGroup
 
 // Server defines the minimum contract our
 // TCP and UDP server implementations must satisfy.
