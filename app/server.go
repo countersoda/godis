@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"errors"
 	"net"
+	"sync"
 )
+
+var wg sync.WaitGroup
 
 // Server defines the minimum contract our
 // TCP and UDP server implementations must satisfy.
@@ -62,7 +65,7 @@ func (t *TCPServer) handleConnection(conn net.Conn) {
 	defer conn.Close()
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	for {
-		buffer := make([]byte, 512*1024*1024)
+		buffer := make([]byte, 512)
 		readBytes, err := conn.Read(buffer)
 		if err != nil {
 			return
